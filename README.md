@@ -1,5 +1,9 @@
 # business-sdk-php
 
+## * This package was updated to be compatible with Guzzle 7.x and Monolog 3.x *
+
+The package was updated in quick manner in order to have it installable using composer without dependency issues on Laravel 11. Use with caution and test before deployment to production.
+
 ## Installation & Usage
 
 ### Requirements
