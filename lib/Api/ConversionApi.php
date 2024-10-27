@@ -15,8 +15,8 @@ use Psr\Log\NullLogger;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
-use function GuzzleHttp\Promise\settle;
-
+use GuzzleHttp\Promise\Utils;
+use Monolog\Level;
 
 class ConversionApi
 {
@@ -52,17 +52,15 @@ class ConversionApi
      * @return void
      */
     public function setDebugging(bool $isEnabled, string $debugFilePath = 'php://output') {
-        //$this->config->setDebug($isEnabled);
         if($isEnabled) {
             if (empty($debugFilePath) || !@fopen($debugFilePath, 'a')) {
                 $errMsg = 'Failed to open and append to the given stream: ' . $debugFilePath;
                 $debugFilePath = 'php://output';
             }
-            $this->logger = new Logger(get_class($this));
-            $this->logger->pushHandler((new StreamHandler($debugFilePath))
-                ->setFormatter(
-                    new LineFormatter(null, null, true, true))
-            );
+            $handler = new StreamHandler($debugFilePath);
+            $handler->setFormatter(new LineFormatter(null, null, true, true));
+            $this->logger = new Logger(get_class($this), [$handler]);
+            
             if (isset($errMsg)) {
                 $this->logger->error($errMsg);
             }
@@ -129,11 +127,11 @@ class ConversionApi
         foreach (array_chunk($capiEvents, CapiConstants::MAX_BATCH) as $batchEvents) {
             try {
                 $meta = $this->apiInstance->sendTestDataWithHttpInfo($batchEvents);
-                $lvl = Logger::INFO;
+                $lvl = Level::Info;
             }
             catch (\Exception $exception) {
                 $meta = $this->castToResponseMetaData($exception, '\SnapBusinessSDK\Model\TestResponse');
-                $lvl = Logger::ERROR;
+                $lvl = Level::Error;
             }
 
             foreach ($batchEvents as $i => $testEvent) {
@@ -150,11 +148,11 @@ class ConversionApi
     public function getTestEventLogs(string $assetId) {
         try {
             $res = $this->apiInstance->conversionValidateLogs($assetId);
-            $lvl = Logger::INFO;
+            $lvl = Level::Info;
         }
         catch (\Exception $exception) {
             $res = (new ResponseLogs())->setStatus('FAILED')->setReason($exception->getMessage());   //->castToResponseMetaData($exception, '\SnapBusinessSDK\Model\TestResponse');
-            $lvl = Logger::ERROR;
+            $lvl = Level::Error;
         }
         $this->logger->log($lvl, $res);
         return $res;
@@ -163,11 +161,11 @@ class ConversionApi
     public function getTestEventStats(string $assetId) {
         try {
             $res = $this->apiInstance->conversionValidateStats($assetId);
-            $lvl = Logger::INFO;
+            $lvl = Level::Info;
         }
         catch (\Exception $exception) {
             $res = (new ResponseStats())->setStatus('FAILED')->setReason($exception->getMessage());   //->castToResponseMetaData($exception, '\SnapBusinessSDK\Model\TestResponse');
-            $lvl = Logger::ERROR;
+            $lvl = Level::Error;
         }
         $this->logger->log($lvl, $res);
         return $res;
@@ -228,7 +226,7 @@ class ConversionApi
             }
         }
 
-        settle($promises)->wait();
+        Utils::settle($promises)->wait();
     }
 
     private function groupErrorRecordsByIndex($response){
@@ -252,14 +250,14 @@ class ConversionApi
 
     private function logCapi(array $capiEvents, Response $response, int $code=null){
         $defaultRes = $code == 200 ? 'SUCCESS' : 'FAILED: ' . $response->getReason();
-        $defaultLvl = $code == 200 ? Logger::INFO : Logger::ERROR;
+        $defaultLvl = $code == 200 ? Level::Info : Level::Error;
 
         $reasons = $this->groupErrorRecordsByIndex($response);
         foreach ($capiEvents as $i => $capiEvent) {
             //1-based array indexing
             if (array_key_exists($i + 1, $reasons)){
                 $res = 'FAILED: ' . $reasons[$i + 1];
-                $lvl = Logger::ERROR;
+                $lvl = Level::Error;
             }
             else{
                 $res = $defaultRes;
